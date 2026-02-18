@@ -1,0 +1,13 @@
+{
+  "asr_models": [
+    {"id": "openai/gpt-4o-transcribe", "label": "OpenAI gpt-4o-transcribe", "provider": "openai", "model_name": "gpt-4o-transcribe"},
+    {"id": "zai/glm-asr-2512", "label": "ZAI GLM-ASR-2512", "provider": "zai", "model_name": "glm-asr-2512", "max_chunk_duration_seconds": 30}
+  ],
+  "phase2_models": [
+    {"id": "zai/glm-4.7-flash", "label": "ZAI GLM-4.7 Flash", "provider": "zai", "model_name": "glm-4.7-flash", "max_concurrency": 1},
+    {"id": "gemini/gemini-2.5-flash", "label": "Gemini 2.5 Flash", "provider": "gemini", "model_name": "gemini-2.5-flash"},
+    {"id": "deepseek/deepseek-v3.2", "label": "DeepSeek V3.2", "provider": "deepseek", "model_name": "deepseek-chat", "default": true},
+    {"id": "openai/gpt-5-nano", "label": "OpenAI gpt-5-nano", "provider": "openai", "model_name": "gpt-5-nano"},
+    {"id": "openai/gpt-5-mini", "label": "OpenAI gpt-5-mini", "provider": "openai", "model_name": "gpt-5-mini"}
+  ]
+}
