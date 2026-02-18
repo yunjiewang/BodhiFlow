@@ -49,10 +49,10 @@ def _get_webshare_proxy_config_from_env() -> Optional[WebshareProxyConfig]:
 
     if username and password:
         try:
+            # filter_ip_locations requires youtube-transcript-api>=1.2.1; omit for compatibility
             return WebshareProxyConfig(
                 proxy_username=username,
                 proxy_password=password,
-                filter_ip_locations=["ca", "us"],
             )
         except Exception as e:
             logger.warning(f"Failed to construct WebshareProxyConfig: {e}")

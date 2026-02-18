@@ -8,7 +8,7 @@ import json
 from typing import Dict
 
 from openai import OpenAI
-from prompts import utility_prompts
+from core.prompts import utility_prompts
 
 
 def enhance_metadata_with_llm(

@@ -103,9 +103,13 @@ def extract_audio_from_video(video_path: str, output_path: str) -> Optional[str]
     """
     Extracts audio from a local video file.
 
+    Output format is inferred from output_path extension:
+    - .mp3 -> MP3 (for ZAI GLM-ASR; saves space and avoids re-encoding in STT)
+    - otherwise -> M4A (AAC)
+
     Args:
         video_path: Path to the input video file
-        output_path: Path where the audio file should be saved
+        output_path: Path where the audio file should be saved (.mp3 or .m4a)
 
     Returns:
         Path to the extracted audio file if successful, None otherwise
@@ -117,22 +121,33 @@ def extract_audio_from_video(video_path: str, output_path: str) -> Optional[str]
     # Ensure output directory exists
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-    # Ensure output has .m4a extension
-    if not output_path.lower().endswith(".m4a"):
+    use_mp3 = output_path.lower().endswith(".mp3")
+    if not use_mp3 and not output_path.lower().endswith(".m4a"):
         output_path = os.path.splitext(output_path)[0] + ".m4a"
+    elif use_mp3 and not output_path.lower().endswith(".mp3"):
+        output_path = os.path.splitext(output_path)[0] + ".mp3"
 
     try:
         # Use ffmpeg-python to extract audio
-        # This provides better error handling than direct subprocess calls
         stream = ffmpeg.input(video_path)
-        stream = ffmpeg.output(
-            stream,
-            output_path,
-            acodec="aac",  # Changed from libmp3lame to aac for m4a
-            audio_bitrate="128k",  # 128 kbps bitrate
-            ac=1,  # Convert to mono to reduce file size
-            ar="22050",
-        )  # Sample rate
+        if use_mp3:
+            stream = ffmpeg.output(
+                stream,
+                output_path,
+                acodec="libmp3lame",
+                audio_bitrate="128k",
+                ac=1,
+                ar="22050",
+            )
+        else:
+            stream = ffmpeg.output(
+                stream,
+                output_path,
+                acodec="aac",
+                audio_bitrate="128k",
+                ac=1,
+                ar="22050",
+            )
 
         # Overwrite output file if it exists
         stream = ffmpeg.overwrite_output(stream)
@@ -158,7 +173,7 @@ def extract_audio_from_video(video_path: str, output_path: str) -> Optional[str]
                 except Exception:
                     stderr_text = str(result.stderr)
                 logger.error(f"FFmpeg error: {stderr_text}")
-                return extract_audio_fallback(video_path, output_path)
+                return extract_audio_fallback(video_path, output_path, use_mp3=use_mp3)
         else:
             # On non-Windows platforms, use normal ffmpeg.run
             ffmpeg.run(stream, quiet=True)
@@ -178,37 +193,47 @@ def extract_audio_from_video(video_path: str, output_path: str) -> Optional[str]
         return None
     except Exception as e:
         logger.error(f"Error extracting audio: {e}")
-        # Try fallback method
-        return extract_audio_fallback(video_path, output_path)
+        # Try fallback method (preserve requested format from output_path)
+        return extract_audio_fallback(
+            video_path, output_path, use_mp3=output_path.lower().endswith(".mp3")
+        )
 
 
-def extract_audio_fallback(video_path: str, output_path: str) -> Optional[str]:
+def extract_audio_fallback(
+    video_path: str, output_path: str, *, use_mp3: bool = False
+) -> Optional[str]:
     """
     Fallback method using direct subprocess call to ffmpeg.
 
     Args:
         video_path: Path to the input video file
         output_path: Path where the audio file should be saved
+        use_mp3: If True, output MP3; else M4A (AAC)
 
     Returns:
         Path to the extracted audio file if successful, None otherwise
     """
     try:
-        # Build ffmpeg command
+        if use_mp3:
+            codec, ext = "libmp3lame", ".mp3"
+        else:
+            codec, ext = "aac", ".m4a"
+        if not output_path.lower().endswith(ext):
+            output_path = os.path.splitext(output_path)[0] + ext
         cmd = [
             "ffmpeg",
             "-i",
             video_path,
-            "-vn",  # No video
+            "-vn",
             "-acodec",
-            "aac",  # Changed from libmp3lame to aac for m4a
+            codec,
             "-ab",
             "128k",
             "-ac",
-            "1",  # Mono
+            "1",
             "-ar",
-            "22050",  # Sample rate
-            "-y",  # Overwrite output
+            "22050",
+            "-y",
             output_path,
         ]
 
@@ -337,6 +362,9 @@ def process_single_video_acquisition(video_data: dict, config: dict) -> dict:
         max_chunk_sec = asr_cfg.get("max_chunk_duration_seconds") or 600
         min_chunk_sec = 5.0 if max_chunk_sec <= 30 else 30.0
         chunk_kwargs = {"max_chunk_duration": max_chunk_sec, "min_chunk_duration": min_chunk_sec}
+        # Use MP3 from upstream when ZAI GLM-ASR is selected (saves space, no re-encode in STT)
+        use_mp3_for_zai = (asr_cfg.get("provider") or "").lower() == "zai"
+        audio_ext = ".mp3" if use_mp3_for_zai else ".m4a"
 
         if source_type == "youtube_url":
             # Try transcript download first
@@ -346,7 +374,8 @@ def process_single_video_acquisition(video_data: dict, config: dict) -> dict:
 
             # Check if AI transcription is disabled
             disable_ai_transcribe = config.get("disable_ai_transcribe", False)
-            
+            last_error = None  # Capture failure reason for diagnostics
+
             if raw_text is None and not disable_ai_transcribe:
                 # Fallback to audio download + STT only if AI transcription is not disabled
                 audio_file_target = (
@@ -373,7 +402,10 @@ def process_single_video_acquisition(video_data: dict, config: dict) -> dict:
                             asr_config=config.get("asr_config"),
                             api_key=config.get("openai_api_key"),
                         )
+                        if not raw_text or not raw_text.strip():
+                            last_error = "ASR returned empty transcript"
                     else:
+                        last_error = "No audio chunks produced"
                         logger.warning(f"No audio chunks found for {video_title}")
 
                     # Clean up: save source audio to intermediate_dir if requested, else remove
@@ -388,7 +420,10 @@ def process_single_video_acquisition(video_data: dict, config: dict) -> dict:
                             os.remove(chunk_path)
                     if chunks_output_dir.exists():
                         chunks_output_dir.rmdir()
+                else:
+                    last_error = "Failed to download YouTube audio (video may be private/restricted; try Cookie file)"
             elif raw_text is None and disable_ai_transcribe:
+                last_error = "No transcript available and AI transcription is disabled"
                 # Log that transcript was not available and AI transcription is disabled
                 logger.warning(f"No transcript available for {video_title} and AI transcription is disabled")
 
@@ -405,7 +440,7 @@ def process_single_video_acquisition(video_data: dict, config: dict) -> dict:
             )
 
             if meeting_video_path:
-                audio_file_target = Path(config["temp_dir"]) / f"{safe_title}_audio.m4a"
+                audio_file_target = Path(config["temp_dir"]) / f"{safe_title}_audio{audio_ext}"
                 audio_path = extract_audio_from_video(
                     meeting_video_path, str(audio_file_target)
                 )
@@ -451,8 +486,8 @@ def process_single_video_acquisition(video_data: dict, config: dict) -> dict:
                 logger.error(f"Failed to download Teams meeting recording for {video_title}")
 
         elif source_type == "local_file":
-            # Extract audio and transcribe
-            audio_file_target = Path(config["temp_dir"]) / f"{safe_title}_audio.m4a"
+            # Extract audio and transcribe (MP3 when ZAI GLM-ASR to avoid re-encode)
+            audio_file_target = Path(config["temp_dir"]) / f"{safe_title}_audio{audio_ext}"
             audio_path = extract_audio_from_video(source_path, str(audio_file_target))
 
             if audio_path:
@@ -571,6 +606,8 @@ def process_single_video_acquisition(video_data: dict, config: dict) -> dict:
                 error_msg = "Failed to extract text from document"
             else:
                 error_msg = "Failed to extract transcript from source"
+                if source_type == "youtube_url" and last_error:
+                    error_msg = f"{error_msg}: {last_error}"
             return {
                 "status": "failure",
                 "video_title": video_title,

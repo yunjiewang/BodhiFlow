@@ -12,7 +12,7 @@ content acquisition (Phase 1) and content refinement (Phase 2).
 
 from pocketflow import Flow
 
-from nodes import (
+from .nodes import (
     AsyncRefinementCoordinatorNode,
     FlowCompletionNode,
     InputExpansionNode,
@@ -61,8 +61,6 @@ def create_bodhi_flow() -> Flow:
     # Cleanup and completion
     temp_cleanup - "cleanup_complete" >> flow_completion
 
-    # flow_completion - "flow_complete" >> None  # End of flow implicitly handled
-
     # Create flow starting with input expansion
     return Flow(start=input_expansion)
 
@@ -89,8 +87,6 @@ def create_phase_1_only_flow() -> Flow:
 
     temp_cleanup - "cleanup_complete" >> flow_completion
 
-    # flow_completion - "flow_complete" >> None
-
     return Flow(start=input_expansion)
 
 
@@ -114,8 +110,6 @@ def create_phase_2_only_flow() -> Flow:
     refinement_task_creator - "phase_2_complete_no_tasks" >> flow_completion
 
     async_refinement - "phase_2_complete" >> flow_completion
-
-    # flow_completion - "flow_complete" >> None
 
     return Flow(start=refinement_task_creator)
 

@@ -57,7 +57,7 @@ text_refinement_prompts = {
     You are a senior business analyst & meeting-minutes specialist.  
     Your task: Read a raw meeting transcript and output **only** the two sections below in Markdown:  
 
-    1. **Action Items**: Markdown table with columns: # | Task | Owner | Due Date (US format) | Status (default “Open”). 
+    1. **Action Items**: Markdown table with columns: # | Task | Owner | Due Date (US format) | Status (default "Open"). 
     2. **Agenda & Notes**: List agenda items in the order discussed. For each item include: Topic, Key Discussion Points (bullet form), Decision (if any), Rationale (1 sentence max). 
     
     Strict rules:  

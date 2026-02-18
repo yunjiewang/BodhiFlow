@@ -24,18 +24,11 @@ Requirements:
 - Google Gemini API for text processing
 """
 
-import enum
 import logging
 import os
-import re
-import sys
-from builtins import KeyError
-from datetime import datetime
 
-import google.generativeai as genai
 from dotenv import load_dotenv
 from PyQt5.QtCore import QFile, Qt, QTextStream, QThread, pyqtSignal, pyqtSlot
-from PyQt5.QtGui import QColor, QFont
 from PyQt5.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -55,16 +48,10 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from pytubefix import Playlist, YouTube
-from youtube_transcript_api import (
-    NoTranscriptFound,
-    TranscriptsDisabled,
-    VideoUnplayable,
-    YouTubeTranscriptApi,
-)
 
-from prompts import text_refinement_prompts
+from core.prompts import text_refinement_prompts
 from utils.logger_config import get_logger
+from utils.ui_config import get_ui_config
 from utils.models_config import (
     get_asr_models,
     get_phase2_models,
@@ -103,10 +90,9 @@ class BodhiFlow_GUI_MainWindow(QMainWindow):  # Renamed class
     - Text refinement using advanced language models
     """
 
-    DEFAULT_CHUNK_SIZE = 70000  # Define default chunk size as a class variable
-
     def __init__(self):
         super().__init__()
+        self.ui_config = get_ui_config()
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         self.prompts = text_refinement_prompts  # From prompts.py at project root
@@ -120,10 +106,6 @@ class BodhiFlow_GUI_MainWindow(QMainWindow):  # Renamed class
             "gemini-2.5-flash",
         ]
         self.selected_model_name = "gemini-2.5-flash"
-
-        # Set the class variable default chunk size using the constant
-        # This might be handled differently with PocketFlow
-        # GeminiProcessingThread.chunk_size = self.DEFAULT_CHUNK_SIZE
 
         self.initUI()
 
@@ -226,7 +208,7 @@ class BodhiFlow_GUI_MainWindow(QMainWindow):  # Renamed class
         self.url_input.textChanged.connect(self._on_url_input_changed)
 
         self.batch_checkbox = QCheckBox("Batch CSV")
-        self.batch_checkbox.setChecked(False)
+        self.batch_checkbox.setChecked(self.ui_config["options"]["batch_csv"])
         self.batch_checkbox.setToolTip("Run multiple jobs from a CSV file; check to show CSV path and select file.")
         self.batch_checkbox.setAttribute(Qt.WA_AlwaysShowToolTips, True)
         self.batch_checkbox.toggled.connect(self._on_batch_checkbox_changed)
@@ -241,9 +223,17 @@ class BodhiFlow_GUI_MainWindow(QMainWindow):  # Renamed class
         self.btn_select_csv.setAttribute(Qt.WA_AlwaysShowToolTips, True)
         self.btn_select_csv.clicked.connect(self._on_select_csv_file)
 
-        # First row: Input path (left-aligned) + folder buttons
+        # First row: Input path + Recursive (above folder buttons) + folder buttons
         url_row = QHBoxLayout()
         url_row.addWidget(self.url_input)
+        self.document_folder_recursive_checkbox = QCheckBox("Recursive📂🔍")
+        self.document_folder_recursive_checkbox.setChecked(
+            self.ui_config["options"]["document_folder_recursive"]
+        )
+        self.document_folder_recursive_checkbox.setToolTip("When selecting a folder (media or documents), include subdirectories (default: on).")
+        self.document_folder_recursive_checkbox.setAttribute(Qt.WA_AlwaysShowToolTips, True)
+        self.document_folder_recursive_checkbox.setVisible(False)  # Shown when media or document folder selected
+        url_row.addWidget(self.document_folder_recursive_checkbox)
         self.btn_media_folder = QPushButton(r"📁⟩🎥")
         self.btn_media_folder.setToolTip("Pick a folder containing video/audio files to process")
         self.btn_media_folder.setFixedWidth(55)
@@ -320,7 +310,7 @@ class BodhiFlow_GUI_MainWindow(QMainWindow):  # Renamed class
         self.language_input.setPlaceholderText("e.g., English, Spanish, French")
         self.language_input.setToolTip("Type the desired output language name. Can be overridden per job in CSV batch mode.")
         # Consider how .env is handled in BodhiFlow project structure
-        self.language_input.setText(os.environ.get("LANGUAGE", "English"))
+        self.language_input.setText(self.ui_config["language"])
         self.language_input.setFixedHeight(32)  # Set fixed height for alignment
         language_layout.addWidget(language_label)
         language_layout.addSpacing(3)
@@ -345,7 +335,7 @@ class BodhiFlow_GUI_MainWindow(QMainWindow):  # Renamed class
         start_label.setToolTip("First item index (1-based).")
         self.start_index_input = QLineEdit()
         self.start_index_input.setPlaceholderText("1")
-        self.start_index_input.setText("1")
+        self.start_index_input.setText(self.ui_config["start_index"])
         self.start_index_input.setFixedWidth(60)
         self.start_index_input.setFixedHeight(32)  # Set fixed height for alignment
         end_label = QLabel("End (0 for all):")
@@ -353,7 +343,7 @@ class BodhiFlow_GUI_MainWindow(QMainWindow):  # Renamed class
         end_label.setToolTip("Last item index (1-based). Use 0 to process all items.")
         self.end_index_input = QLineEdit()
         self.end_index_input.setPlaceholderText("0")
-        self.end_index_input.setText("0")
+        self.end_index_input.setText(self.ui_config["end_index"])
         self.end_index_input.setFixedWidth(60)
         self.end_index_input.setFixedHeight(32)  # Set fixed height for alignment
         start_end_layout.addWidget(start_label)
@@ -382,19 +372,23 @@ class BodhiFlow_GUI_MainWindow(QMainWindow):  # Renamed class
         options_grid.setColumnStretch(2, 1)
         
         self.metadata_enhance_checkbox = QCheckBox("Metadata")
-        self.metadata_enhance_checkbox.setChecked(True)
+        self.metadata_enhance_checkbox.setChecked(
+            self.ui_config["options"]["metadata_enhance"]
+        )
         self.metadata_enhance_checkbox.setToolTip("Enhance missing description/tags via gpt-5-nano")
         self.metadata_enhance_checkbox.setAttribute(Qt.WA_AlwaysShowToolTips, True)
         
         self.resume_checkbox = QCheckBox("Resume from Last Run")
         self.resume_checkbox.setObjectName("ResumeCheckbox")
-        self.resume_checkbox.setChecked(False)
+        self.resume_checkbox.setChecked(self.ui_config["options"]["resume"])
         self.resume_checkbox.setToolTip("Skip items that already have a transcript in the Intermediate folder; retry only failed or new items.")
         self.resume_checkbox.setAttribute(Qt.WA_AlwaysShowToolTips, True)
         
         self.disable_ai_transcribe_checkbox = QCheckBox("Disable AI Audio Transcribe")
         self.disable_ai_transcribe_checkbox.setObjectName("DisableAITranscribeCheckbox")
-        self.disable_ai_transcribe_checkbox.setChecked(False)
+        self.disable_ai_transcribe_checkbox.setChecked(
+            self.ui_config["options"]["disable_ai_transcribe"]
+        )
         self.disable_ai_transcribe_checkbox.setToolTip(
             "When enabled, YouTube videos will only use downloaded transcripts.\n"
             "No AI audio transcription fallback will be used, saving costs."
@@ -403,29 +397,32 @@ class BodhiFlow_GUI_MainWindow(QMainWindow):  # Renamed class
         
         self.save_video_checkbox = QCheckBox("Save Video")
         self.save_video_checkbox.setObjectName("SaveVideoCheckbox")
-        self.save_video_checkbox.setChecked(False)
+        self.save_video_checkbox.setChecked(
+            self.ui_config["options"]["save_video"]
+        )
         self.save_video_checkbox.setToolTip(
             "When enabled, if fallback to AI transcription is used, the downloaded video or audio file "
             "is moved from temp to the Intermediate Transcript Folder for preservation."
         )
         self.save_video_checkbox.setAttribute(Qt.WA_AlwaysShowToolTips, True)
         
-        self.document_folder_recursive_checkbox = QCheckBox("Recursive📂🔍")
-        self.document_folder_recursive_checkbox.setChecked(True)
-        self.document_folder_recursive_checkbox.setToolTip("When selecting a document folder, include subdirectories (default: on).")
-        self.document_folder_recursive_checkbox.setAttribute(Qt.WA_AlwaysShowToolTips, True)
-        self.document_folder_recursive_checkbox.setVisible(False)  # Hidden by default, shown only when folder is selected
+        self.phase2_skip_existing_checkbox = QCheckBox("🔒Existing .md")
+        self.phase2_skip_existing_checkbox.setChecked(
+            self.ui_config["options"]["phase2_skip_existing"]
+        )
+        self.phase2_skip_existing_checkbox.setToolTip("When re-running: skip Phase 2 refinement for outputs that already exist; do not overwrite.")
+        self.phase2_skip_existing_checkbox.setAttribute(Qt.WA_AlwaysShowToolTips, True)
 
         # Arrange in 2x3 grid:
         # Row 0: Batch CSV, Resume from Last Run, Save Video
-        # Row 1: Metadata, Disable AI Audio Transcribe, Recursive📂🔍
+        # Row 1: Metadata, Disable AI Audio Transcribe, 🔒Existing .md
         # Set alignment to ensure vertical alignment within columns
         options_grid.addWidget(self.batch_checkbox, 0, 0, Qt.AlignLeft | Qt.AlignTop)
         options_grid.addWidget(self.resume_checkbox, 0, 1, Qt.AlignLeft | Qt.AlignTop)
         options_grid.addWidget(self.save_video_checkbox, 0, 2, Qt.AlignLeft | Qt.AlignTop)
         options_grid.addWidget(self.metadata_enhance_checkbox, 1, 0, Qt.AlignLeft | Qt.AlignTop)
         options_grid.addWidget(self.disable_ai_transcribe_checkbox, 1, 1, Qt.AlignLeft | Qt.AlignTop)
-        options_grid.addWidget(self.document_folder_recursive_checkbox, 1, 2, Qt.AlignLeft | Qt.AlignTop)
+        options_grid.addWidget(self.phase2_skip_existing_checkbox, 1, 2, Qt.AlignLeft | Qt.AlignTop)
 
         options_container.addLayout(options_grid)
         lang_range_options_layout.addLayout(options_container, 1)  # Options section takes remaining space and aligns right
@@ -450,10 +447,15 @@ class BodhiFlow_GUI_MainWindow(QMainWindow):  # Renamed class
         # Arrange checkboxes in a grid layout - 3 columns
         row, col = 0, 0
         columns = 3
-        default_checked_styles = {"Balanced and Detailed", "Summary"}
+        style_defaults = self.ui_config["default_checked_styles"]
         for style_name in style_keys:
             cb = QCheckBox(style_name)
-            if style_name in default_checked_styles:
+            checked = (
+                style_defaults.get(style_name, False)
+                if isinstance(style_defaults, dict)
+                else style_name in (style_defaults or [])
+            )
+            if checked:
                 cb.setChecked(True)
             style_layout.addWidget(cb, row, col)
             self.style_checkboxes[style_name] = cb
@@ -478,7 +480,9 @@ class BodhiFlow_GUI_MainWindow(QMainWindow):  # Renamed class
         chunk_size_label = QLabel("LLM Chunk Size (Advanced):")  # Label updated
         chunk_size_label.setObjectName("ChunkSizeLabel")
         chunk_size_label.setToolTip("Max words per chunk sent to the Phase 2 LLM. Lower = more API calls but safer for context limits.")
-        self.chunk_size_value_label = QLabel(str(self.DEFAULT_CHUNK_SIZE))
+        chunk_cfg = self.ui_config["chunk_size"]
+        default_chunk = chunk_cfg["default"]
+        self.chunk_size_value_label = QLabel(str(default_chunk))
         self.chunk_size_value_label.setObjectName("ChunkSizeValueLabel")
 
         chunk_header_layout.addWidget(chunk_size_label)
@@ -489,16 +493,18 @@ class BodhiFlow_GUI_MainWindow(QMainWindow):  # Renamed class
         # Slider
         self.chunk_size_slider = QSlider(Qt.Horizontal)
         self.chunk_size_slider.setObjectName("ChunkSlider")
-        self.chunk_size_slider.setToolTip("Drag to set max words per refinement chunk. Default 70000.")
-        self.chunk_size_slider.setMinimum(5000)
-        self.chunk_size_slider.setMaximum(500000)  # Max might need adjustment
-        self.chunk_size_slider.setValue(self.DEFAULT_CHUNK_SIZE)
+        self.chunk_size_slider.setToolTip(
+            f"Drag to set max words per refinement chunk. Default {default_chunk}."
+        )
+        self.chunk_size_slider.setMinimum(chunk_cfg["min"])
+        self.chunk_size_slider.setMaximum(chunk_cfg["max"])
+        self.chunk_size_slider.setValue(default_chunk)
         self.chunk_size_slider.valueChanged.connect(self.update_chunk_size_label)
         chunk_size_layout.addWidget(self.chunk_size_slider)
 
         # Description
         self.chunk_size_description = QLabel(
-            f"(Max words for LLM refinement stage. Default: {self.DEFAULT_CHUNK_SIZE}. Adjust if facing LLM context limits.)"  # Updated description
+            f"(Max words for LLM refinement stage. Default: {default_chunk}. Adjust if facing LLM context limits.)"
         )
         self.chunk_size_description.setObjectName("ChunkSizeDescriptionLabel")
         self.chunk_size_description.setToolTip("Long transcripts are split into chunks; each chunk is refined separately. Increase for fewer API calls; decrease if you hit token limits.")
@@ -955,42 +961,53 @@ class BodhiFlow_GUI_MainWindow(QMainWindow):  # Renamed class
         # We can create the dir if it doesn't exist, so check if it's a valid *potential* path later
         # For now, just ensure it's not empty.
 
+        phase_1_only = self.phase_1_only_checkbox.isChecked()
+        phase_2_only = self.phase_2_only_checkbox.isChecked()
+        run_phase_1 = not phase_2_only
+        run_phase_2 = not phase_1_only
+
         asr_id = self.asr_model_combo.currentData() or get_default_asr_id()
         phase2_id = self.phase2_model_combo.currentData() or get_default_phase2_id()
         asr_entry = next((m for m in self._asr_models if m.get("id") == asr_id), None)
         phase2_entry = next((m for m in self._phase2_models if m.get("id") == phase2_id), None)
         asr_provider = asr_entry.get("provider", "openai") if asr_entry else "openai"
         phase2_provider = phase2_entry.get("provider", "zai") if phase2_entry else "zai"
-        if asr_provider == "openai" and not self.openai_api_key_input.text().strip():
-            self._show_warning_message(
-                "API Key Required", "OpenAI API key is required for the selected ASR model."
-            )
-            return False
-        if asr_provider == "zai" and not self.zai_api_key_input.text().strip():
-            self._show_warning_message(
-                "API Key Required", "ZAI API key is required for the selected ASR model."
-            )
-            return False
-        if phase2_provider == "gemini" and not self.gemini_api_key_input.text().strip():
-            self._show_warning_message(
-                "API Key Required", "Gemini API key is required for the selected Phase 2 model."
-            )
-            return False
-        if phase2_provider == "openai" and not self.openai_api_key_input.text().strip():
-            self._show_warning_message(
-                "API Key Required", "OpenAI API key is required for the selected Phase 2 model."
-            )
-            return False
-        if phase2_provider == "deepseek" and not self.deepseek_api_key_input.text().strip():
-            self._show_warning_message(
-                "API Key Required", "DeepSeek API key is required for the selected Phase 2 model."
-            )
-            return False
-        if phase2_provider == "zai" and not self.zai_api_key_input.text().strip():
-            self._show_warning_message(
-                "API Key Required", "ZAI API key is required for the selected Phase 2 model."
-            )
-            return False
+
+        # Only require ASR key when Phase 1 will run
+        if run_phase_1:
+            if asr_provider == "openai" and not self.openai_api_key_input.text().strip():
+                self._show_warning_message(
+                    "API Key Required", "OpenAI API key is required for the selected ASR model."
+                )
+                return False
+            if asr_provider == "zai" and not self.zai_api_key_input.text().strip():
+                self._show_warning_message(
+                    "API Key Required", "ZAI API key is required for the selected ASR model."
+                )
+                return False
+
+        # Only require Phase 2 model key when Phase 2 will run
+        if run_phase_2:
+            if phase2_provider == "gemini" and not self.gemini_api_key_input.text().strip():
+                self._show_warning_message(
+                    "API Key Required", "Gemini API key is required for the selected Phase 2 model."
+                )
+                return False
+            if phase2_provider == "openai" and not self.openai_api_key_input.text().strip():
+                self._show_warning_message(
+                    "API Key Required", "OpenAI API key is required for the selected Phase 2 model."
+                )
+                return False
+            if phase2_provider == "deepseek" and not self.deepseek_api_key_input.text().strip():
+                self._show_warning_message(
+                    "API Key Required", "DeepSeek API key is required for the selected Phase 2 model."
+                )
+                return False
+            if phase2_provider == "zai" and not self.zai_api_key_input.text().strip():
+                self._show_warning_message(
+                    "API Key Required", "ZAI API key is required for the selected Phase 2 model."
+                )
+                return False
 
         if not self.language_input.text().strip():
             self._show_warning_message(
@@ -998,7 +1015,8 @@ class BodhiFlow_GUI_MainWindow(QMainWindow):  # Renamed class
             )
             return False
 
-        if not any(cb.isChecked() for cb in self.style_checkboxes.values()):
+        # Only require at least one refinement style when Phase 2 will run
+        if run_phase_2 and not any(cb.isChecked() for cb in self.style_checkboxes.values()):
             self._show_warning_message(
                 "No Style Selected", "Please select at least one Refinement Style."
             )
@@ -1060,7 +1078,8 @@ class BodhiFlow_GUI_MainWindow(QMainWindow):  # Renamed class
             self.phase_1_only_checkbox,  # Added phase control checkboxes
             self.phase_2_only_checkbox,
             self.batch_checkbox,  # Added batch checkbox
-            self.document_folder_recursive_checkbox,  # Added document folder recursive checkbox
+            self.document_folder_recursive_checkbox,
+            self.phase2_skip_existing_checkbox,
         ]
         for style_cb in self.style_checkboxes.values():
             style_cb.setEnabled(not processing)
@@ -1181,6 +1200,7 @@ class BodhiFlow_GUI_MainWindow(QMainWindow):  # Renamed class
             "end_index": self.end_index,
             "llm_chunk_size": self.chunk_size_slider.value(),
             "resume_mode": self.resume_checkbox.isChecked(),
+            "phase2_skip_existing": self.phase2_skip_existing_checkbox.isChecked(),
             "document_folder_recursive": self.document_folder_recursive_checkbox.isChecked(),
             "disable_ai_transcribe": self.disable_ai_transcribe_checkbox.isChecked(),
             "save_video_on_ai_transcribe": self.save_video_checkbox.isChecked(),
@@ -1194,7 +1214,7 @@ class BodhiFlow_GUI_MainWindow(QMainWindow):  # Renamed class
             "csv_path": self.csv_path if is_csv_mode else None,
             "max_workers_processes": 4,
             "max_workers_async": get_phase2_model_max_concurrency(phase2_model_id) or 10,
-            # Callbacks are handled by PocketFlowRunner in main.py
+            # Callbacks are handled by PocketFlowRunner in core.pocketflow_runner
         }
 
         # Ensure output directory exists
@@ -1236,8 +1256,7 @@ class BodhiFlow_GUI_MainWindow(QMainWindow):  # Renamed class
         )
         self.update_status(start_msg, StatusType.START)
 
-        # Import PocketFlowRunner
-        from main import PocketFlowRunner
+        from core.pocketflow_runner import PocketFlowRunner
 
         # Create and start PocketFlow runner thread
         self.pocketflow_runner = PocketFlowRunner(flow_params)
@@ -1381,7 +1400,7 @@ class BodhiFlow_GUI_MainWindow(QMainWindow):  # Renamed class
         if self.input_mode_hint == "media_folder":
             self.btn_media_folder.setStyleSheet("QPushButton { background-color: #008000; padding: 2px;}")
             self.btn_doc_folder.setStyleSheet("QPushButton { background-color: #D3D3D3; padding: 2px;}")
-            self.document_folder_recursive_checkbox.setVisible(False)  # Hide for media folder
+            self.document_folder_recursive_checkbox.setVisible(True)  # Show for media folder (recursive supported)
         elif self.input_mode_hint == "document_folder":
             self.btn_media_folder.setStyleSheet("QPushButton { background-color: #D3D3D3; padding: 2px;}")
             self.btn_doc_folder.setStyleSheet("QPushButton { background-color: #008000; padding: 2px;}")

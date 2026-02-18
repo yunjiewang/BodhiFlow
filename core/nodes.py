@@ -258,7 +258,8 @@ class InputExpansionNode(Node):
                     )
 
             elif input_type == "folder":
-                files = list_video_files_in_folder(user_input_path)
+                recursive = prep_data.get("document_folder_recursive", True)
+                files = list_video_files_in_folder(user_input_path, recursive=recursive)
                 files = _apply_range(files, start_index, end_index)
 
                 for file_path in files:
@@ -578,6 +579,7 @@ class RefinementTaskCreatorNode(Node):
             "status_callback": shared["status_update_callback"],
             "phase_2_only": shared.get("phase_2_only", False),
             "resume_mode": shared.get("resume_mode", False),
+            "phase2_skip_existing": shared.get("phase2_skip_existing", False),
         }
 
     def exec(self, prep_data):
@@ -591,6 +593,7 @@ class RefinementTaskCreatorNode(Node):
         job_overrides = prep_data.get("job_overrides") or {}
         phase_2_only = prep_data["phase_2_only"]
         resume_mode = prep_data["resume_mode"]
+        phase2_skip_existing = prep_data.get("phase2_skip_existing", False)
 
         if phase_2_only:
             status_callback(
@@ -613,7 +616,7 @@ class RefinementTaskCreatorNode(Node):
 
         # CSV batch: group by job_id and use per-job styles/output_subdir when present
         if transcript_file_to_job_id and job_overrides:
-            from prompts import text_refinement_prompts
+            from .prompts import text_refinement_prompts
 
             by_job = defaultdict(list)
             for tf in transcript_files:
@@ -647,6 +650,17 @@ class RefinementTaskCreatorNode(Node):
                 status_callback("No refinement styles selected", StatusType.ERROR)
                 return []
             tasks = create_refinement_tasks(transcript_files, styles_data, output_base_dir)
+
+        # Filter out tasks whose output MD already exists when phase2_skip_existing is on
+        if phase2_skip_existing and tasks:
+            before = len(tasks)
+            tasks = [t for t in tasks if not os.path.exists(t["output_file"])]
+            skipped = before - len(tasks)
+            if skipped > 0:
+                status_callback(
+                    f"Skipped {skipped} task(s) with existing output (🔒Existing .md)",
+                    StatusType.INFO,
+                )
 
         status_callback(
             f"Created {len(tasks)} refinement tasks",

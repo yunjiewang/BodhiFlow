@@ -13,7 +13,7 @@ from typing import Any
 # Built-in defaults (match plan section 2)
 _DEFAULT_ASR_MODELS = [
     {"id": "openai/gpt-4o-transcribe", "label": "OpenAI gpt-4o-transcribe", "provider": "openai", "model_name": "gpt-4o-transcribe"},
-    {"id": "zai/glm-asr-2512", "label": "ZAI GLM-ASR-2512", "provider": "zai", "model_name": "glm-asr-2512", "max_chunk_duration_seconds": 30},
+    {"id": "zai/glm-asr-2512", "label": "ZAI GLM-ASR-2512", "provider": "zai", "model_name": "glm-asr-2512", "max_chunk_duration_seconds": 30, "max_concurrency": 5},
 ]
 _DEFAULT_PHASE2_MODELS = [
     { "id": "zai/glm-4.7-flash", "label": "ZAI GLM-4.7 Flash", "provider": "zai", "model_name": "glm-4.7-flash", "default": True, "max_concurrency": 1 },
@@ -85,6 +85,23 @@ def get_model_by_id(model_id: str, kind: str) -> dict[str, Any] | None:
         if m.get("id") == model_id:
             return m
     return None
+
+
+def get_asr_model_max_concurrency(asr_model_id: str) -> int | None:
+    """
+    Return the max_concurrency limit for the given ASR model, if set.
+    Used e.g. for ZAI GLM-ASR-2512 (max 5 concurrent calls per API limit).
+    """
+    entry = get_model_by_id(asr_model_id, "asr")
+    if not entry:
+        return None
+    val = entry.get("max_concurrency")
+    if val is None:
+        return None
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        return None
 
 
 def get_phase2_model_max_concurrency(phase2_model_id: str) -> int | None:
