@@ -1,0 +1,271 @@
+/* General Styles */
+QMainWindow {
+    background-color: #e6e6e6;
+}
+
+QLabel {
+    color: #333333; /* Default label color */
+    font-size: 10pt; /* Default font size for labels */
+    /* font-weight: normal; Default weight */
+}
+
+QLineEdit {
+    background: white;
+    /* margin-left: 20px; Removed - Apply via layout spacing if needed */
+    border: 1px solid #cccccc;
+    border-radius: 4px;
+    color: #333333;
+    padding: 6px;
+    font-size: 9pt; /* Explicitly set font size */
+}
+
+QLineEdit:focus {
+    border: 1px solid #e74c3c; /* Highlight color */
+}
+
+QLineEdit:disabled, QLineEdit:read-only {
+    background: #eeeeee;
+    border-color: #cccccc;
+    color: #777777;
+}
+
+QTextEdit { /* Base style for QTextEdit */
+    background-color: white;
+    border: 1px solid #cccccc;
+    border-radius: 5px;
+    color: #333333;
+    font-size: 10pt; /* Adjusted default size slightly */
+    padding: 8px;
+}
+
+QTextEdit:read-only {
+    /* Keep specific read-only styles if needed, otherwise handled by base */
+}
+
+
+QProgressBar {
+    background: #eeeeee;
+    border: 1px solid #cccccc;
+    border-radius: 5px;
+    text-align: center;
+    color: #333333;
+    font-size: 10pt; /* Adjusted default size slightly */
+    height: 24px;
+}
+
+QProgressBar::chunk {
+    background: #27ae60; /* Success/Progress color */
+    border-radius: 5px;
+}
+
+QGroupBox {
+    border: 1px solid #cccccc;
+    border-radius: 5px;
+    margin-top: 7px; /* Restored specific margin-top */
+    padding: 10px; /* Reduced top padding slightly */
+    padding-top: 15px; /* Increase top padding to make space for title */
+    background: white;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left; /* Position title */
+    left: 10px;
+    padding: 0 5px;
+    margin-top: -5px; /* Adjust vertical position slightly */
+    background: white; /* Ensure background matches GroupBox */
+    color: #333333;
+    font-size: 10pt;
+    font-weight: bold; /* Ensure title is bold */
+}
+
+QCheckBox {
+     color: #333333;
+     font-size: 10pt; /* Ensure font size */
+}
+
+/* Specific style for Resume checkbox to match Start/End labels */
+#ResumeCheckbox {
+    font-size: 9pt;
+    margin-left: 15px; /* Keep margin */
+    font-weight: normal; /* Explicitly normal */
+}
+
+/* Specific style for Disable AI Transcribe checkbox to match Resume checkbox */
+#DisableAITranscribeCheckbox {
+    font-size: 9pt;
+    margin-left: 15px; /* Keep margin */
+    font-weight: normal; /* Explicitly normal */
+}
+
+QMessageBox { /* For dialog styling */
+    background-color: white;
+    color: #333333;
+}
+
+QSlider {
+    padding: 2px 0;
+}
+QSlider::groove:horizontal {
+    border: 1px solid #999999;
+    height: 8px;
+    background: #cccccc;
+    /* margin: 2px 0; -> Use padding on QSlider itself */
+    border-radius: 4px;
+}
+QSlider::handle:horizontal {
+    background: #e74c3c; /* Handle color */
+    border: 1px solid #5c5c5c;
+    width: 18px;
+    height: 18px; /* Should match width for circle */
+    margin: -6px 0; /* Adjust vertical position relative to groove */
+    border-radius: 9px;
+}
+QSlider::handle:horizontal:hover {
+    background: #c0392b; /* Handle hover color */
+}
+
+
+/* Base Button Style */
+QPushButton {
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 10px 20px;
+    font-size: 14px; /* Base size */
+    font-weight: bold; /* Base weight */
+    background: #7f8c8d; /* Default background */
+}
+
+QPushButton:hover {
+    background: #34495e; /* Default hover */
+}
+
+QPushButton:pressed {
+    background: #34495e; /* Default pressed */
+    padding-top: 11px;
+    padding-bottom: 9px;
+}
+
+QPushButton:disabled {
+    background: #cccccc;
+    color: #888888;
+}
+
+/* === Specific Widget Styles using Object Names === */
+
+/* Title Label */
+#TitleLabel {
+    color: white;
+    padding: 10px;
+    border-radius: 8px;
+    background: #e74c3c;
+    /* Alignment is better set in code */
+    font-size: 18pt;
+    font-weight: bold;
+}
+
+/* Input Container */
+#InputContainer {
+    background-color: #f5f5f5;
+    border-radius: 10px;
+    padding: 15px;
+}
+
+/* Progress Container */
+#ProgressContainer {
+    background-color: #f5f5f5;
+    border-radius: 10px;
+    padding: 10px;
+}
+
+/* Chunk Size Container */
+#ChunkSizeContainer {
+     background-color: #eaeaea;
+     border-radius: 5px;
+     padding: 8px;
+}
+
+/* === Specific Labels === */
+/* Labels acting as titles/headings */
+#UrlLabel, #LanguageLabel, #IndexLabel, #ApiKeyLabel, #OpenAiApiKeyLabel,
+#IntermediateDirLabel, #CookieFileLabel, #SummaryOutputDirLabel,
+#ChunkSizeLabel, #PhaseControlLabel {
+    font-size: 10pt;
+    font-weight: bold;
+    color: #333333;
+}
+
+/* Smaller labels like Start/End */
+#StartLabel, #EndLabel {
+     font-size: 9pt;
+     font-weight: normal; /* Explicitly normal */
+     color: #333333;
+     margin-right: 3px; /* Add tiny space before input */
+}
+
+
+/* Chunk Size Value Label */
+#ChunkSizeValueLabel {
+    font-size: 10pt; /* Match title label */
+    color: #e74c3c;
+    font-weight: bold;
+}
+
+/* Chunk Size Description Label */
+#ChunkSizeDescriptionLabel {
+     font-size: 8pt;
+     color: #666666;
+     font-weight: normal; /* Override bold */
+}
+
+/* Status Display */
+#StatusDisplay {
+    font-size: 10pt; /* Match other text edits */
+    /* Inherits base QTextEdit */
+}
+
+/* === Buttons === */
+#ExtractButton {
+    background: #e74c3c; /* Red */
+}
+#ExtractButton:hover, #ExtractButton:pressed {
+    background: #c0392b;
+}
+#ExtractButton:disabled {
+    background: #cccccc;
+    color: #888888;
+}
+
+#CancelButton {
+    background: #7f8c8d; /* Gray */
+}
+#CancelButton:hover, #CancelButton:pressed {
+    background: #34495e;
+}
+/* CancelButton:disabled uses base style */
+
+/* Choose File/Folder Buttons */
+#FileButton, #DirectoryButton {
+     background: #3498db; /* Blue */
+     font-size: 11pt;
+     font-weight: bold;
+     padding: 8px 15px;
+}
+#FileButton:hover, #FileButton:pressed,
+#DirectoryButton:hover, #DirectoryButton:pressed {
+     background: #2980b9;
+}
+
+/* --- Add these rules --- */
+#FileButton:disabled, #DirectoryButton:disabled {
+    background: #cccccc; /* Specific gray for disabled blue buttons */
+    color: #888888;     /* Ensure text color is also gray */
+}
+/* --------------------- */
+
+/* Base Button Disabled Style (applies if not overridden by ID) */
+QPushButton:disabled {
+    background: #cccccc;
+    color: #888888;
+} 

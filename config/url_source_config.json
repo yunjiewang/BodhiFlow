@@ -1,0 +1,16 @@
+{
+  "url_sources": [
+    {
+      "id": "bilibili_video",
+      "label": "Bilibili",
+      "domain_patterns": ["bilibili.com", "b23.tv"],
+      "implemented": false
+    },
+    {
+      "id": "webpage_text",
+      "label": "Webpage (text)",
+      "domain_patterns": ["*"],
+      "implemented": true
+    }
+  ]
+}

@@ -31,20 +31,16 @@ ENV/
 *.swp
 *.swo
 
-# Environment variables
-.env
-
-# Logs
-*.log
-
-# OS specific
+# OS
 .DS_Store
 Thumbs.db
 
 # Project specific
-output/
-transcripts/
-
-# YouTube Authentication
+*.log
+logs/
+.env
+intermediate_transcripts/
 cookie.txt
-
+cookies.txt
+temp_bodhiflow/
+*.tmp
