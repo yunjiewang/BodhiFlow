@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 def _get_valid_style_names() -> set:
     """Return set of valid refinement style names (must match GUI/prompts)."""
     try:
-        from prompts import text_refinement_prompts
+        from core.prompts import text_refinement_prompts
         return set(text_refinement_prompts.keys())
     except Exception:
         return set()

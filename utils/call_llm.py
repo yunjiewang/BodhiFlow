@@ -3,13 +3,15 @@ Generic LLM calling utility for BodhiFlow.
 
 Supports OpenAI, Gemini, DeepSeek, and ZAI via provider_config.
 Legacy Gemini-only: call_llm(prompt, model_name=..., api_key=...).
+
+Migrated to google-genai (google.genai) – see https://ai.google.dev/gemini-api/docs/migrate
 """
 
 import os
 import time
 from typing import Any, Optional
 
-import google.generativeai as genai
+from google import genai
 from openai import OpenAI
 
 from .logger_config import get_logger
@@ -26,22 +28,19 @@ except ImportError:
 
 
 def _call_gemini(prompt: str, model_name: str, api_key: str, max_retries: int) -> str:
-    if api_key:
-        genai.configure(api_key=api_key)
-    else:
-        env_key = os.environ.get("GEMINI_API_KEY")
-        if env_key:
-            genai.configure(api_key=env_key)
-        else:
-            raise ValueError("No API key provided and GEMINI_API_KEY not set")
-    model = genai.GenerativeModel(model_name)
+    key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not key:
+        raise ValueError("No API key provided and GEMINI_API_KEY/GOOGLE_API_KEY not set")
+    client = genai.Client(api_key=key)
     for attempt in range(max_retries):
         try:
-            response = model.generate_content(prompt)
+            response = client.models.generate_content(model=model_name, contents=prompt)
             if response.text:
                 return response.text
-            if hasattr(response, "prompt_feedback"):
-                raise Exception(f"Content was blocked: {response.prompt_feedback}")
+            if hasattr(response, "prompt_feedback") and response.prompt_feedback:
+                fb = response.prompt_feedback
+                msg = getattr(fb, "block_reason_message", None) or getattr(fb, "block_reason", str(fb))
+                raise Exception(f"Content was blocked: {msg}")
             raise Exception("No text in response")
         except Exception as e:
             _handle_retry("gemini", model_name, e, attempt, max_retries)

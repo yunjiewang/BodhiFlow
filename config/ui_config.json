@@ -1,0 +1,27 @@
+{
+  "chunk_size": {
+    "default": 70000,
+    "min": 5000,
+    "max": 500000
+  },
+  "options": {
+    "batch_csv": false,
+    "resume": true,
+    "metadata_enhance": true,
+    "disable_ai_transcribe": false,
+    "save_video": false,
+    "phase2_skip_existing": true,
+    "document_folder_recursive": true
+  },
+  "default_checked_styles": {
+    "Balanced and Detailed": true,
+    "Summary": true,
+    "Educational": false,
+    "Narrative Rewriting": false,
+    "Q&A Generation": false,
+    "Meeting Minutes (BETA)": false
+  },
+  "language": "简体中文",
+  "start_index": "1",
+  "end_index": "0"
+}

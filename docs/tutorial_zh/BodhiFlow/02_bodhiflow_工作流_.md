@@ -50,7 +50,7 @@ graph TD
 
 ## BodhiFlow 工作流的构建块
 
-我们的“总装配线蓝图”是在 `flow.py` 这个文件中定义的。它通过连接不同的[流程节点 (Node)](06_流程节点__node__.md)来创建完整的工作流程。让我们来认识一下这些核心的“车间”：
+我们的“总装配线蓝图”是在 `core/flow.py` 中定义的。它通过连接不同的[流程节点 (Node)](06_流程节点__node__.md)来创建完整的工作流程。让我们来认识一下这些核心的“车间”：
 
 *   **`InputExpansionNode` (输入扩展节点)**：这是流水线的入口。它负责接收你输入的任何内容（单个视频链接、播放列表、本地文件夹等），并将其“展开”成一份标准化的待处理任务清单。
 *   **`ParallelAcquisitionCoordinatorNode` (并行获取协调节点)**：这是**[第一阶段：内容获取](03_第一阶段_内容获取_.md)** 的核心。它会同时处理多个任务，比如从 YouTube 下载字幕或将本地音频转为文字。
@@ -61,13 +61,13 @@ graph TD
 
 ### 代码一瞥：连接节点，构建蓝图
 
-那么，这些独立的节点是如何被连接成一个完整的工作流的呢？让我们看看 `flow.py` 中最核心的函数 `create_bodhi_flow()` 的简化版：
+那么，这些独立的节点是如何被连接成一个完整的工作流的呢？让我们看看 `core/flow.py` 中最核心的函数 `create_bodhi_flow()` 的简化版：
 
 ```python
-# 文件: flow.py
+# 文件: core/flow.py
 
 from pocketflow import Flow
-from nodes import (
+from core.nodes import (
     InputExpansionNode,
     ParallelAcquisitionCoordinatorNode,
     # ... 导入其他节点 ...
@@ -104,10 +104,10 @@ BodhiFlow 的一个强大之处在于它的灵活性。还记得 GUI 界面上�
 
 ![Phase Control Checkboxes](https://raw.githubusercontent.com/1271623157/BodhiFlow/main/docs/images/bodhiflow-gui-phase-control.png)
 
-当你只勾选“第一阶段”时，BodhiFlow 并不会加载上面那个完整的蓝图，而是会使用一个“精简版”的蓝图。这是通过 `flow.py` 文件中的 `create_flow_for_phases` 函数实现的。
+当你只勾选“第一阶段”时，BodhiFlow 并不会加载上面那个完整的蓝图，而是会使用一个“精简版”的蓝图。这是通过 `core/flow.py` 中的 `create_flow_for_phases` 函数实现的。
 
 ```python
-# 文件: flow.py
+# 文件: core/flow.py
 
 def create_flow_for_phases(run_phase_1: bool, run_phase_2: bool) -> Flow:
     """根据阶段选择，创建合适的工作流"""
@@ -164,7 +164,7 @@ sequenceDiagram
 
 *   **工作流**是整个应用的总装配线蓝图，它定义了从输入到输出的每一个处理步骤。
 *   工作流由一系列相互连接的**[流程节点 (Node)](06_流程节点__node__.md)** 组成，每个节点负责一项具体任务。
-*   通过在 `flow.py` 中连接不同的节点，我们可以构建出完整或部分的、灵活的处理流程，以适应不同的需求。
+*   通过在 `core/flow.py` 中连接不同的节点，我们可以构建出完整或部分的、灵活的处理流程，以适应不同的需求。
 *   工作流引擎负责调度节点的执行顺序，而一个**共享数据**对象则像一个“工作托盘”，在节点之间传递信息和处理结果。
 
 现在，你已经对 BodhiFlow 的整体架构有了清晰的认识。我们知道了有“控制室”（GUI）和“总装配线蓝图”（工作流）。从下一章开始，我们将拿起放大镜，仔细观察这条装配线上的第一个重要工段。

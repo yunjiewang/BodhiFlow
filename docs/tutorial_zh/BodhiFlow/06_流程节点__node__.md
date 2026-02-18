@@ -18,7 +18,7 @@
 *   **标准化的工作流程**：每个节点都遵循一套相同的工作节拍——“准备、执行、收尾”。这保证了它们可以被工作流引擎统一调度。
 *   **可插拔**：就像乐高积木一样，每个节点都是一个独立的模块。我们可以轻松地将它们连接起来，构建出各种各样的工作流。
 
-在 BodhiFlow 中，所有的节点都定义在 `nodes.py` 文件里，它们是整个应用逻辑的核心构建块。
+在 BodhiFlow 中，所有的节点都定义在 `core/nodes.py` 里，它们是整个应用逻辑的核心构建块。
 
 ## 一个节点的生命周期：“准备-执行-收尾”
 
@@ -59,7 +59,7 @@ graph TD
 让我们来看一个极度简化的节点代码，它清晰地展示了这“三步曲”结构。
 
 ```python
-# 文件: nodes.py (简化示例)
+# 文件: core/nodes.py (简化示例)
 
 from pocketflow import Node
 
@@ -125,10 +125,10 @@ sequenceDiagram
 
 ### 代码深潜
 
-以下是 `nodes.py` 中 `TempFileCleanupNode` 的简化版代码：
+以下是 `core/nodes.py` 中 `TempFileCleanupNode` 的简化版代码：
 
 ```python
-# 文件: nodes.py (TempFileCleanupNode 简化版)
+# 文件: core/nodes.py (TempFileCleanupNode 简化版)
 import shutil
 from pathlib import Path
 from pocketflow import Node
@@ -154,7 +154,7 @@ class TempFileCleanupNode(Node):
 这个节点的逻辑非常清晰：
 1.  **`prep`**: 从共享数据 `shared` 中拿到 `temp_dir` 的路径。
 2.  **`exec`**: 使用 Python 的 `shutil.rmtree` 函数，毫不留情地删除该路径对应的文件夹。
-3.  **`post`**: 无论 `exec` 做了什么，它都返回一个固定的信号 `"cleanup_complete"`。在 `flow.py` 的蓝图中，这个信号会触发下一个节点，通常是 `FlowCompletionNode`（流程完成节点）。
+3.  **`post`**: 无论 `exec` 做了什么，它都返回一个固定的信号 `"cleanup_complete"`。在 `core/flow.py` 的蓝图中，这个信号会触发下一个节点，通常是 `FlowCompletionNode`（流程完成节点）。
 
 这个例子完美地展示了一个理想节点的特性：目标明确、逻辑简单、与系统的其他部分高度解耦。
 

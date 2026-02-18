@@ -20,7 +20,7 @@ BodhiFlow is built around a **two-phase processing model** implemented using Poc
 
 BodhiFlow will transform video content (from YouTube or local files) into structured, refined Markdown documents, accessible via a user-friendly Graphical User Interface (GUI). The GUI will remain active throughout the process, allowing users to track progress. 
 
-> Future requirements will be added/updated to here from "Work in Progress & Future Enhancements" section in progress.md
+> Future requirements will be added/updated to here from "Work in Progress & Future Enhancements" section in TODO.md
 
 **User Stories:**
 
@@ -339,8 +339,8 @@ flowchart LR
     *   *Necessity*: Fallback for YouTube if transcripts fail; uses `yt-dlp`.
 
 5.  **`extract_audio_from_video(video_path: str, output_path: str) -> str | None`** (`utils/acquisition_processor.py`)
-    *   *Input*: `video_path` (str) - local video, `output_path` (str) - dir to save audio.
-    *   *Output*: `str` (Path to extracted M4A audio file) or `None` on failure.
+    *   *Input*: `video_path` (str) - local video, `output_path` (str) - path for output (extension determines format).
+    *   *Output*: `str` (Path to extracted audio file) or `None` on failure. Format is inferred from `output_path`: if it ends with `.mp3`, output is MP3 (used when ZAI GLM-ASR is selected to save space and avoid re-encoding); otherwise M4A (AAC).
     *   *Necessity*: To get audio from local video files. (Uses `ffmpeg`).
 
 6.  **`chunk_audio_on_silence(audio_path: str, output_dir: str) -> list[str]`** (`utils/audio_chunker.py`)
@@ -354,7 +354,7 @@ flowchart LR
     *   *Necessity*: AI STT for audio chunks. By default, uses the `gpt-4o-transcribe` model (with automatic fallback to `whisper-1` if unavailable) via the OpenAI `/audio/transcriptions` endpoint.
 
 8.  **`refine_text_with_llm(text_content: str, style_prompt_template: str, language: str) -> str`** (`utils/llm_refiner.py`)
-    *   *Input*: `text_content` (str), `style_prompt_template` (str from `prompts.py`), `language` (str).
+    *   *Input*: `text_content` (str), `style_prompt_template` (str from `core/prompts.py`), `language` (str).
     *   *Output*: `str` - Refined Markdown.
     *   *Necessity*: To transform raw text into styled Markdown using an LLM (e.g., Gemini). Will internally use `call_llm`.
 
@@ -403,10 +403,10 @@ flowchart LR
     *   *Output*: `dict` - A dictionary containing video metadata such as duration, size, codecs, width, height, etc. Returns an empty dictionary on failure.
     *   *Necessity*: To obtain technical details about a video file, which can be useful for logging, pre-processing decisions, or advanced features. Uses `ffmpeg-python`.
 
-18. **`transcribe_audio_chunks(chunk_paths: list[str], api_key: Optional[str], language: Optional[str]) -> str`** (`utils/speech_to_text.py`)
-    *   *Input*: `chunk_paths` (list[str]) - A list of file paths to audio chunks. `api_key` (Optional[str]) for OpenAI. `language` (Optional[str]) language code.
+18. **`transcribe_audio_chunks(chunk_paths: list[str], asr_config: Optional[dict], api_key: Optional[str]) -> str`** (`utils/speech_to_text.py`)
+    *   *Input*: `chunk_paths` (list[str]) - Paths to audio chunks. `asr_config` (Optional[dict]) - provider (openai/zai), model_name, api_key; when provider is zai, chunks are sent to ZAI GLM-ASR (only .wav/.mp3 accepted; non-mp3/wav chunks are converted to MP3 on the fly). `api_key` (Optional[str]) for OpenAI when asr_config is not used.
     *   *Output*: `str` - The combined transcript text from all successfully transcribed chunks.
-    *   *Necessity*: Provides a higher-level function to manage the transcription of multiple audio segments (e.g., from `chunk_audio_on_silence`) and consolidate their results. Internally uses `transcribe_audio_chunk_openai`.
+    *   *Necessity*: Higher-level transcription of multiple segments; dispatches by ASR provider. Chunks are processed sequentially per source; Phase 1 process count is capped by ASR `max_concurrency` when set.
 
 19. **`estimate_transcription_cost(audio_duration_seconds: float) -> float`** (`utils/speech_to_text.py`)
     *   *Input*: `audio_duration_seconds` (float) - The total duration of audio to be transcribed, in seconds.
@@ -493,16 +493,19 @@ flowchart LR
     - Use `yt-dlp` extract_info(download=False). If it fails, return minimal fields (`title`, `source_url`) without interrupting the main flow.
 
 33. `enhance_metadata_with_llm(text: str, language: str, model: str) -> dict` (`utils/meta_infer.py`)
-    - Use OpenAI Responses API with model=`gpt-5-nano` (default) and the `Metadata Enhancement` prompt in `prompts.py`.
+    - Use OpenAI Responses API with model=`gpt-5-nano` (default) and the `Metadata Enhancement` prompt in `core/prompts.py`.
     - Output: `{ "description": str, "tags": [str,...] }` (desc <= 140 chars; 3–5 short tags).
 
 34. Model configuration (`config/models_config.json`, `utils/models_config.py`)
     - JSON config defines `asr_models` and `phase2_models` (id, label, provider, model_name, optional default).
     - Optional **Phase 2**: `max_concurrency` (int) — when set (e.g. ZAI GLM-4.7-Flash: 1), GUI sets `max_workers_async` from `get_phase2_model_max_concurrency(phase2_model_id)` so refinement runs with that concurrency and avoids rate limits.
-    - Optional **ASR**: `max_chunk_duration_seconds` (int) — when set (e.g. ZAI GLM-ASR-2512: 30), Phase 1 passes it in `asr_config`; `chunk_audio_on_silence` in `acquisition_processor` uses it so audio is sliced within that duration before STT.
-    - `get_asr_models()`, `get_phase2_models()`, `get_default_asr_id()`, `get_default_phase2_id()`, `get_model_by_id(id, kind)`.
+    - Optional **ASR**: `max_chunk_duration_seconds` (int) — when set (e.g. ZAI GLM-ASR-2512: 30), Phase 1 passes it in `asr_config`; `chunk_audio_on_silence` uses it so audio is sliced before STT. **ASR** `max_concurrency` (int) — when set (e.g. ZAI GLM-ASR-2512: 5), Phase 1 parallel workers are capped via `get_asr_model_max_concurrency(asr_model_id)` in the runner so the number of concurrent ASR API calls does not exceed the provider limit.
+    - `get_asr_models()`, `get_phase2_models()`, `get_default_asr_id()`, `get_default_phase2_id()`, `get_model_by_id(id, kind)`, `get_asr_model_max_concurrency(asr_model_id)`.
     - Phase 2 LLM routing: `call_llm(prompt, provider_config)` supports provider in {gemini, openai, deepseek, zai}.
-    - ASR routing: `transcribe_audio_chunks(chunk_paths, asr_config)` supports provider in {openai, zai}.
+    - ASR routing: `transcribe_audio_chunks(chunk_paths, asr_config)` supports provider in {openai, zai}. When ZAI is selected, acquisition uses MP3 for extract/chunk (local and Teams) so no format conversion is needed at STT time.
+
+35. UI configuration (`config/ui_config.json`, `utils/ui_config.py`)
+    - `get_ui_config()` loads defaults for: `language` (e.g. 简体中文), `default_checked_styles` (bool per style), `chunk_size`, `options` (resume, metadata_enhance, phase2_skip_existing, etc.). GUI reads these at startup; no `.env` for language.
 
 
 ## Node Design
@@ -528,7 +531,8 @@ shared = {
     "start_index": 1,                # int
     "end_index": 0,                  # int (0 for all)
     "llm_chunk_size": 70000,         # int
-    "resume_mode": False,            # bool
+    "resume_mode": True,             # bool (default from config/ui_config.json)
+    "phase2_skip_existing": True,    # bool: skip Phase 2 for outputs that already exist (default from ui_config)
     "disable_ai_transcribe": False,  # bool: When True, YouTube videos only use downloaded transcripts, no STT fallback
     "save_video_on_ai_transcribe": False,  # bool: When True, on AI transcription fallback move downloaded audio/video to intermediate_dir (unique names; chunks not saved)
     "selected_gemini_model": None,   # str (legacy; phase2_model_id is primary)
@@ -538,7 +542,7 @@ shared = {
     "run_phase_2": True,             # bool: Run content refinement phase (False if Phase 1 Only checked)
     "phase_1_only": False,           # bool: Phase 1 Only checkbox state
     "phase_2_only": False,           # bool: Phase 2 Only checkbox state
-    "max_workers_processes": 4,      # int: Max processes for audio/video work
+    "max_workers_processes": 4,      # int: Max processes for Phase 1 (capped by ASR max_concurrency when set, e.g. ZAI GLM-ASR: 5)
     "max_workers_async": 10,         # int: Max concurrent async tasks (API calls)
 
     # GUI Callbacks (must be thread-safe or emit signals to GUI thread)
@@ -653,7 +657,7 @@ shared.update({
                 *   Submit async task to:
                     *   Load raw transcript from `task["transcript_file"]`.
                     *   Call `refine_text_with_llm(..., provider_config=provider_config)` (or legacy model_name/api_key).
-                    *   Load standardized metadata from `shared["source_metadata"]` or sidecar `.meta.json`. If `description`/`tags` missing and `metadata_enhancement_enabled`, enhance via LLM (`metadata_llm_model` = gpt-5-nano) using the utility prompt in `prompts.py`.
+                    *   Load standardized metadata from `shared["source_metadata"]` or sidecar `.meta.json`. If `description`/`tags` missing and `metadata_enhancement_enabled`, enhance via LLM (`metadata_llm_model` = gpt-5-nano) using the utility prompt in `core/prompts.py`.
                     *   Build YAML front matter from metadata and prepend to the refined body, then save to `task["output_file"]`.
                 *   Update progress via `shared["status_update_callback"]` as tasks complete.
             *   Collect all results, updating `shared["phase_2_results"]`.
@@ -689,7 +693,7 @@ shared.update({
 - Each final Markdown begins with YAML front matter using the standardized schema.
 - Factual fields (`author`, `published_at`, `source_url`, `duration`) come from source adapters only.
 - `description`/`tags`:
-  - Prefer source-provided; if missing, enhance via `gpt-5-nano` (OpenAI) using the Responses API and `prompts.py`’s `Metadata Enhancement` prompt.
+  - Prefer source-provided; if missing, enhance via `gpt-5-nano` (OpenAI) using the Responses API and `core/prompts.py`’s `Metadata Enhancement` prompt.
 - All timestamps ISO8601 (UTC); `tags` de-duplicated and normalized.
 
 ### Example: Responses API for metadata enhancement (gpt-5-nano)
@@ -699,7 +703,7 @@ shared.update({
 # Migrated to Responses API – see docs 2025-03-11
 from openai import OpenAI
 import os, json
-from prompts import utility_prompts  # contains "Metadata Enhancement"
+from core.prompts import utility_prompts  # contains "Metadata Enhancement"
 
 def enhance_metadata_with_llm(text: str, language: str = "English", model: str = "gpt-5-nano") -> dict:
     """

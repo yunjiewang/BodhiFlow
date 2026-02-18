@@ -2,7 +2,7 @@
 
 Turn videos, meetings, podcasts, and documents (PDF, Word, PowerPoint, Excel, EPUB, Markdown, etc.) into structured Markdown you can search, share, and reuse.
 
----
+<br>
 
 ## Why BodhiFlow?
 
@@ -20,14 +20,15 @@ Content is everywhere -- in video, audio, and documents. BodhiFlow extracts the 
 | **Researcher** with PDFs or Word files     | Extracted text refined into Summary, Educational, or Q&A; one output per source file.            |
 
 <br>
+
 <table>
   <tr>
     <td><img src="img/poster.jpg" alt="Poster Image" height="400"/></td>
     <td><img src="img/ui.jpg" alt="User Interface Image" height="400"/></td>
   </tr>
 </table>
+
 <br>
----
 
 ## Features
 
@@ -46,7 +47,7 @@ Pick one or more per run; each produces a separate output file.
 | 🤝 **Meeting Minutes** (beta) | Action items and decisions from meeting recordings.        |
 
 
-Styles live in `prompts.py` and can be customized.
+Styles live in `core/prompts.py` and can be customized.
 
 ### Supported sources
 
@@ -59,7 +60,7 @@ Styles live in `prompts.py` and can be customized.
 
 **Documents (text extracted via MarkItDown, then refined like transcripts)**
 
-- **Supported formats:** PDF, Word (.doc/.docx), PowerPoint (.pptx), Excel (.xlsx/.xls), EPUB, Outlook (.msg), Markdown (.md/.markdown), HTML, plain text (.txt), CSV, JSON, XML (all formats supported by [MarkItDown](https://pypi.org/project/markitdown/) with `markitdown[all]`).
+- **Supported formats:** PDF, Word (.doc/.docx), PowerPoint (.pptx), Excel (.xlsx/.xls), EPUB, Outlook (.msg), Markdown (.md/.markdown), HTML, plain text (.txt), CSV, JSON, XML (via [MarkItDown](https://pypi.org/project/markitdown/) with `markitdown[docx,outlook,pdf,pptx,xls,xlsx]`).
 - Local file or folder of documents; optional recursive subfolders.
 - Webpage URL (content fetched and converted to text).
 
@@ -78,19 +79,21 @@ You only need an API key for the provider(s) you actually use.
 
 ### More options
 
-- **Output language** -- e.g. English, Simplified Chinese; the refined text will be in that language.
+- **Output language** -- e.g. English, 简体中文; default from `config/ui_config.json`.
 - **Batch CSV** -- list many inputs in a spreadsheet: columns `input` (required), `styles`, `language`, `output_subdir` (optional). Save as UTF-8. One row per job.
-- **Resume** -- skip items already processed; only retry failed or new ones.
+- **Resume** -- skip items already processed; only retry failed or new ones (default: on).
 - **Video range** -- for playlists/folders, process items from position X to Y.
 - **Disable AI Transcribe** -- for YouTube only: use existing captions only; no audio download or AI transcription fallback (saves cost when captions are usually available).
 - **Save source media** -- optionally keep the downloaded audio/video for your records.
 - **Metadata enhancement** -- optionally use AI to fill in missing descriptions and tags.
 - **Chunk size** (advanced) -- controls how much text is sent to the LLM per call (default works for most users).
 - **Model configuration** -- add or swap AI models by editing `config/models_config.json`; no code change needed.
-- **ZAI model constraints** -- ZAI ASR (GLM-ASR-2512) requires audio chunks ≤30s and ≤25MB; the config uses `max_chunk_duration_seconds: 30` so the app automatically slices audio to meet this. ZAI Phase 2 (e.g. GLM-4.7-Flash) uses `max_concurrency: 1` in config to avoid rate limits and stuck tasks; refinement runs one request at a time when this model is selected.
+- **ZAI model constraints** -- ZAI ASR (GLM-ASR-2512) accepts only .wav or .mp3 and allows at most 5 concurrent API calls. When you select this ASR model: (1) the app extracts and chunks audio as **MP3** from the start (local/Teams) to save space and avoid re-encoding; (2) Phase 1 parallel workers are automatically **capped at 5** via `max_concurrency` in the ASR config so the provider limit is not exceeded. Chunk duration is limited to 30s via `max_chunk_duration_seconds: 30`. ZAI Phase 2 (e.g. GLM-4.7-Flash) uses `max_concurrency: 1` in config so refinement runs one request at a time when that model is selected.
 - **URL source whitelist** -- `config/url_source_config.json` defines which URL types and domains are accepted (e.g. webpage text extraction). Each entry has `id`, `label`, `domain_patterns` (e.g. `["*"]` for any domain, or `["example.com"]` to allow only that host), and `implemented`. The first matching entry wins; if no match, the URL is rejected with a hint to add the domain. Use this to restrict which websites can be used as input or to add new URL source types.
+- **UI defaults** -- `config/ui_config.json` controls default language (e.g. 简体中文), default checked refinement styles, chunk size, and option checkboxes (Resume, Metadata, etc.). Edit without code changes.
+- **Webshare proxy** (optional) -- when YouTube blocks your IP, set `WEBSHARE_PROXY_USERNAME` and `WEBSHARE_PROXY_PASSWORD` in `.env` (or `PROXY_USERNAME`/`PROXY_PASSWORD`) to use Webshare residential proxies for transcript fetching. Requires a Webshare account and Residential proxy package.
 
----
+<br>
 
 ## Getting started
 
@@ -108,13 +111,17 @@ From the BodhiFlow project folder:
 uv pip install -U -r requirements.txt   # or: pip install -U -r requirements.txt
 ```
 
-Optionally copy `.env.example` to `.env` and set your API keys (and optionally `LANGUAGE`) so the app pre-fills them.
+Optionally copy `.env.example` to `.env` and set your API keys so the app pre-fills them. Output language and other UI defaults are in `config/ui_config.json`.
 
 ### How to run
 
 1. **Obtain API Keys**: 
- - * For the audio transcription feature, get an OpenAI API key from ++[OpenAI Platform](https://platform.openai.com/)++ or ZAI key from ++[Z.AI Platform](https://z.ai/manage-apikey/apikey-list)++
- - * For text refinement, get an API Key from ++[Google AI Studio](https://ai.google.dev/gemini-api/docs/api-key)++, ++[OpenAI Platform](https://platform.openai.com/)++, ++[Z.AI Platform](https://z.ai/manage-apikey/apikey-list)++, or ++[DeepSeek Platform](https://platform.deepseek.com/api_keys)++,
+    - For the audio transcription feature, get an OpenAI API key from [OpenAI Platform](https://platform.openai.com/) or a ZAI key from [Z.AI Platform](https://z.ai/manage-apikey/apikey-list)
+    - For text refinement, get an API key from one of the following:
+        - [Google AI Studio](https://ai.google.dev/gemini-api/docs/api-key)
+        - [OpenAI Platform](https://platform.openai.com/)
+        - [Z.AI Platform](https://z.ai/manage-apikey/apikey-list)
+        - [DeepSeek Platform](https://platform.deepseek.com/api_keys)
 2. **One-time setup:** Set the default program for `.pyw` files to **pythonw** (e.g. Right-click `main.pyw` → Open with → Choose another app → pythonw.exe → check "Always use this app"). After that, double-clicking `main.pyw` will start BodhiFlow without a console window.
 3. **Shortcut:** Create a shortcut (`.lnk`) to `main.pyw` and place it on the desktop, taskbar, or any folder. Open Properties and set the "Target" path to "{YOUR_PATH_TO}\BodhiFlow\main.pyw" and "Start in" path to "{YOUR_PATH_TO}\BodhiFlow" and Change Icon path to "{YOUR_PATH_TO}\BodhiFlow\BodhiFlow.ico". You can then launch BodhiFlow from anywhere with one click like a normal software.
 
@@ -130,18 +137,22 @@ Optionally copy `.env.example` to `.env` and set your API keys (and optionally `
 Tips: Hover over any control for a tooltip. 
 Output: one Markdown file per (source x style) in your output folder.
 
----
+<br>
 
 ## Project structure
 
 ```
 BodhiFlow/
 |-- main.pyw                   # Entry point (run this)
-|-- flow.py                    # PocketFlow Flow: the workflow pipeline definition — which nodes run, in what order, and how data is passed
-|-- nodes.py                   # PocketFlow Nodes: what task is being processed at each node in the workflow
-|-- prompts.py                 # Refinement style prompts (editable)
+|-- core/
+|   |-- flow.py                 # PocketFlow Flow: workflow pipeline definition
+|   |-- nodes.py                # PocketFlow Nodes: task logic at each step
+|   |-- prompts.py              # Refinement style prompts (editable)
+|   |-- pocketflow_runner.py    # QThread runner for the flow
+|   |-- launch.py               # GUI/CLI launch
 |-- config/
 |   |-- models_config.json     # AI model list (editable)
+|   |-- ui_config.json        # UI defaults: language (default 简体中文), default_checked_styles (bool per style), chunk size, options (editable)
 |   |-- url_source_config.json # URL whitelist (editable)
 |-- gui/
 |   |-- main_window.py        # Main window, controls, tooltips
@@ -156,6 +167,7 @@ BodhiFlow/
 |   |-- metadata.py           # YAML front matter; meta_infer.py = optional AI metadata enhancement
 |   |-- csv_batch.py          # Batch CSV parsing (input, styles, language, output_subdir)
 |   |-- models_config.py      # Load config/models_config.json
+|   |-- ui_config.py         # Load config/ui_config.json
 |   |-- youtube_downloader.py, transcript_fetcher.py  # YouTube
 |   |-- teams_meeting.py      # Teams videomanifest
 |   |-- podcast_parser.py     # Podcast RSS
@@ -166,14 +178,14 @@ BodhiFlow/
 |-- requirements.txt
 ```
 
----
+<br>
 
 ## Documentation
 
 - [Design and architecture](docs/design.md)
 - [How does BodhiFlow work? (Chinese)](docs/tutorial_zh/BodhiFlow/index.md) 
 
----
+<br>
 
 ## License and credits
 

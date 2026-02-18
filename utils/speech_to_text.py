@@ -3,9 +3,15 @@ Speech-to-text utilities for BodhiFlow.
 
 Supports OpenAI (gpt-4o-transcribe / whisper-1) and ZAI (glm-asr-2512).
 Use transcribe_audio_chunks(..., asr_config=...) for provider dispatch.
+
+ZAI GLM-ASR only accepts .wav or .mp3. When using ZAI, upstream (extract_audio_from_video)
+outputs .mp3 so no conversion is needed; otherwise we convert to .mp3 here to save space.
 """
 
 import os
+import subprocess
+import sys
+import tempfile
 import time
 from typing import Any, Optional
 
@@ -21,6 +27,41 @@ try:
 except ImportError:
     ZaiClient = None  # type: ignore
     _ZAI_AVAILABLE = False
+
+
+def _convert_to_mp3_for_zai(source_path: str) -> Optional[str]:
+    """
+    Convert audio to .mp3 in a temp file for ZAI API (which only accepts .wav or .mp3).
+    Returns path to temp .mp3 file, or None on failure. Caller must delete the temp file.
+    If source is already .wav or .mp3, returns None (no conversion needed).
+    Uses MP3 to save space vs WAV.
+    """
+    ext = os.path.splitext(source_path)[1].lower()
+    if ext in (".wav", ".mp3"):
+        return None
+    fd, mp3_path = tempfile.mkstemp(suffix=".mp3")
+    os.close(fd)
+    try:
+        creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+        subprocess.run(
+            [
+                "ffmpeg", "-y", "-i", source_path,
+                "-acodec", "libmp3lame", "-ab", "128k", "-ac", "1", "-ar", "22050",
+                mp3_path,
+            ],
+            capture_output=True,
+            check=True,
+            creationflags=creationflags,
+        )
+        return mp3_path
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        logger.warning(f"FFmpeg convert to mp3 for ZAI failed: {e}")
+        if os.path.exists(mp3_path):
+            try:
+                os.remove(mp3_path)
+            except OSError:
+                pass
+        return None
 
 
 def transcribe_audio_chunk_openai(
@@ -160,29 +201,38 @@ def transcribe_audio_chunk_zai(
     if not key:
         logger.error("No ZAI API key provided and ZAI_API_KEY not set")
         return None
+    # ZAI only accepts .wav or .mp3; convert .m4a (and other) chunks to .mp3 if needed
+    path_to_use = _convert_to_mp3_for_zai(audio_chunk_path) or audio_chunk_path
     client = ZaiClient(api_key=key)
-    for attempt in range(max_retries):
-        try:
-            with open(audio_chunk_path, "rb") as audio_file:
-                response = client.audio.transcriptions.create(
-                    model=model_name,
-                    file=audio_file,
-                )
-            text = getattr(response, "text", None) or (response if isinstance(response, str) else None)
-            if text:
-                logger.debug(f"Successfully transcribed (ZAI): {os.path.basename(audio_chunk_path)}")
-                return text
-            logger.warning(f"Empty transcript (ZAI) for: {audio_chunk_path}")
-            return None
-        except Exception as e:
-            logger.warning(f"ZAI transcription attempt {attempt + 1} failed: {e}")
-            if "rate" in str(e).lower() and attempt < max_retries - 1:
-                time.sleep((attempt + 1) * 5)
-                continue
-            if attempt == max_retries - 1:
-                logger.error(f"Failed to transcribe with ZAI after {max_retries} attempts")
+    try:
+        for attempt in range(max_retries):
+            try:
+                with open(path_to_use, "rb") as audio_file:
+                    response = client.audio.transcriptions.create(
+                        model=model_name,
+                        file=audio_file,
+                    )
+                text = getattr(response, "text", None) or (response if isinstance(response, str) else None)
+                if text:
+                    logger.debug(f"Successfully transcribed (ZAI): {os.path.basename(audio_chunk_path)}")
+                    return text
+                logger.warning(f"Empty transcript (ZAI) for: {audio_chunk_path}")
                 return None
-    return None
+            except Exception as e:
+                logger.warning(f"ZAI transcription attempt {attempt + 1} failed: {e}")
+                if "rate" in str(e).lower() and attempt < max_retries - 1:
+                    time.sleep((attempt + 1) * 5)
+                    continue
+                if attempt == max_retries - 1:
+                    logger.error(f"Failed to transcribe with ZAI after {max_retries} attempts")
+                    return None
+        return None
+    finally:
+        if path_to_use != audio_chunk_path and os.path.exists(path_to_use):
+            try:
+                os.remove(path_to_use)
+            except OSError as e:
+                logger.debug(f"Could not remove temp mp3 {path_to_use}: {e}")
 
 
 def transcribe_audio_chunks(

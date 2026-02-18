@@ -177,12 +177,13 @@ def list_document_files_in_folder(
     return out
 
 
-def list_video_files_in_folder(folder_path: str) -> List[str]:
+def list_video_files_in_folder(folder_path: str, recursive: bool = False) -> List[str]:
     """
     Lists all supported media files (video or audio) in the specified folder.
 
     Args:
         folder_path: Path to the folder to search
+        recursive: If True, include subdirectories; otherwise current dir only.
 
     Returns:
         List of absolute paths to media files in the folder
@@ -226,16 +227,21 @@ def list_video_files_in_folder(folder_path: str) -> List[str]:
         print(f"Warning: {folder_path} is not a directory")
         return media_files
 
-    # Walk through the directory (non-recursive for now)
-    for filename in os.listdir(folder_path):
-        file_path = os.path.join(folder_path, filename)
-
-        # Check if it's a file and has a video extension
-        if os.path.isfile(file_path):
-            _, ext = os.path.splitext(filename)
-            if ext.lower() in media_extensions:
-                # Return absolute paths
-                media_files.append(os.path.abspath(file_path))
+    if recursive:
+        for root, _dirs, names in os.walk(folder_path):
+            for filename in names:
+                _, ext = os.path.splitext(filename)
+                if ext.lower() in media_extensions:
+                    file_path = os.path.join(root, filename)
+                    if os.path.isfile(file_path):
+                        media_files.append(os.path.abspath(file_path))
+    else:
+        for filename in os.listdir(folder_path):
+            file_path = os.path.join(folder_path, filename)
+            if os.path.isfile(file_path):
+                _, ext = os.path.splitext(filename)
+                if ext.lower() in media_extensions:
+                    media_files.append(os.path.abspath(file_path))
 
     # Sort for consistent ordering
     media_files.sort()
@@ -336,8 +342,8 @@ def clean_filename(filename: str) -> str:
         cleaned = f"{cleaned}_file"
     
     # Limit length to avoid filesystem issues (leave room for suffixes like _source_audio.ext)
-    if len(cleaned) > 80:
-        cleaned = cleaned[:80].rstrip()
+    if len(cleaned) > 100:
+        cleaned = cleaned[:100].rstrip()
     
     return cleaned
 
